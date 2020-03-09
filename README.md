@@ -22,7 +22,7 @@ git checkout -b your_feature_branch origin/master
 
 ### Compile and Run Source code
 ```sh
-cd astar
+cd astar && cd build
 cmake .. && make
 ./astar
 ```
