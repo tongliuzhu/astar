@@ -2,6 +2,9 @@
 #include <stdlib.h>
 #include <algorithm>
 #include <opencv2/opencv.hpp>
+
+#include <libgen.h>
+#include <unistd.h>
 #define PIXEL_SIZE 40
 
 using namespace std;
@@ -219,8 +222,9 @@ public:
 	}
 };
 
-int main()
+int main(int argc, char *argv[])
 {
+    chdir(dirname(argv[0]));  // set path of the .exe as current path dir
 	int start_point_x = 1;
 	int start_point_y = 1;
 	int goal_point_x = 12;
