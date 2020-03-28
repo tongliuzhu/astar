@@ -3,9 +3,8 @@
 #include <algorithm>
 #include <opencv2/opencv.hpp>
 
-#include <libgen.h>
-#include <unistd.h>
 #define PIXEL_SIZE 40
+#define USE_HEURISTIC true //false means using Dijkstra to search
 
 using namespace std;
 using namespace cv;
@@ -13,12 +12,12 @@ Mat img(600, 1000, CV_8UC3, Scalar(255, 255, 255));
 
 struct CPoint
 {
-	CPoint(int x, int y) : X(x), Y(y), G(0), H(0), F(0), m_parentPoint(NULL){};
-	~CPoint();
+	CPoint(int x, int y) : X(x), Y(y), G(0), H(0), F(0), m_parentPoint(nullptr){};
+	~CPoint() {delete m_parentPoint; m_parentPoint = nullptr;};
 
 	void CalF()
 	{
-		F = G + H;
+		F = (USE_HEURISTIC == true) ? G + H : G;
 	};
 	int X, Y, G, H, F;
 	CPoint *m_parentPoint;
@@ -33,22 +32,22 @@ private:
 	POINTVEC m_closeVec;
 
 public:
-	AStar(vector<vector<int>>& array)
+	AStar(vector<vector<int>> &array)
 	{
 		m_array.resize(array.size());
-		for (int i = 0; i < array.size(); i++)
+		for (size_t i = 0; i < array.size(); i++)
 		{
 			m_array[i].resize(array[i].size());
-			for(int j = 0; j < array[0].size(); j++)
+			for (size_t j = 0; j < array[0].size(); j++)
 			{
 				m_array[i][j] = array[i][j];
 			}
-		}		
+		}
 	}
 	CPoint *GetMinFPoint()
 	{
-		int idx = 0, valueF = 9999;
-		for (int i = 0; i < m_openVec.size(); ++i)
+		size_t idx = 0, valueF = 9999;
+		for (size_t i = 0; i < m_openVec.size(); ++i)
 		{
 			if (m_openVec[i]->F < valueF)
 			{
@@ -102,7 +101,7 @@ public:
 		for (int x = point->X - 1; x <= point->X + 1; ++x)
 			for (int y = point->Y - 1; y <= point->Y + 1; ++y)
 			{
-				if(x < 0 || x >= m_array.size() || y < 0 || y >= m_array[0].size())
+				if (x < 0 || x >= m_array.size() || y < 0 || y >= m_array[0].size())
 				{
 					continue; // if outside of the map, do nothing // if not core dump
 				}
@@ -116,7 +115,8 @@ public:
 		return adjacentPoints;
 	}
 
-	bool isInOpenVec(int x, int y)
+	bool isInOpenVec(int x, int y) // this is not good and time consuming, you can add a bool value to indicate whether the node 
+	// is visited or not, so no need to search for every time
 	{
 		for (POINTVEC::iterator it = m_openVec.begin(); it != m_openVec.end(); ++it)
 		{
@@ -151,7 +151,7 @@ public:
 	{
 		point->m_parentPoint = tmpStart;
 		point->G = CalcG(tmpStart, point);
-		point->G = CalcH(end, point);
+		point->H = CalcH(end, point);
 		point->CalF();
 		m_openVec.push_back(point);
 	}
@@ -190,10 +190,10 @@ public:
 			right_bottom.y = left_up.y + PIXEL_SIZE;
 			rectangle(img, left_up, right_bottom, Scalar(255, 0, 0), CV_FILLED, 8, 0); //path yellow(full)
 
-			POINTVEC adjacentPoints = GetAdjacentPoints(tmpStart, canDiagDirection);
+			std::vector<CPoint *> adjacentPoints = GetAdjacentPoints(tmpStart, canDiagDirection);
 			for (POINTVEC::iterator it = adjacentPoints.begin(); it != adjacentPoints.end(); ++it)
 			{
-				CPoint *point = *it;
+				CPoint *point = *it;				 // it is originally a double pointer
 				if (isInOpenVec(point->X, point->Y)) // 在开启列表
 					RefreshPoint(tmpStart, point);
 				else
@@ -207,11 +207,12 @@ public:
 					AddInOpenVec(tmpStart, end, point);
 				}
 			}
-			imshow("Test", img); //窗口中显示图像
-			waitKey(1000); // display the image for 1000ms
+
+			imshow("Test", img);			 //窗口中显示图像
+			waitKey(200);					 // display the image for 1000ms
 			if (isInOpenVec(end->X, end->Y)) // 目标点已经在开启列表中
 			{
-				for (int i = 0; i < m_openVec.size(); ++i)
+				for (size_t i = 0; i < m_openVec.size(); ++i)
 				{
 					if (end->X == m_openVec[i]->X && end->Y == m_openVec[i]->Y)
 						return m_openVec[i];
@@ -224,27 +225,26 @@ public:
 
 int main(int argc, char *argv[])
 {
-    chdir(dirname(argv[0]));  // set path of the .exe as current path dir
-	int start_point_x = 1;
-	int start_point_y = 1;
+	int start_point_x = 6;
+	int start_point_y = 6;
 	int goal_point_x = 12;
-	int goal_point_y = 16;
+	int goal_point_y = 20;
 	vector<vector<int>> array =
 		{
-		   //0  1  2  3  4  5  6  7  8  9 10  11,12,13,14,15,16,17,18,19,20,21,22,23,24
-			{1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1}, // 0
-			{1, 0, 0, 1, 1, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 0, 0, 0, 0, 1}, // 1
-			{1, 0, 0, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 1}, // 2
-			{1, 0, 0, 0, 0, 0, 1, 0, 0, 1, 1, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 1}, // 3
-			{1, 1, 1, 0, 0, 0, 0, 0, 1, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 1}, // 4
-			{1, 1, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 1}, // 5
-			{1, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 1}, // 6
-			{1, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 0, 0, 0, 0, 1}, // 7
-			{1, 0, 0, 0, 0, 0, 1, 0, 0, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 1}, // 8
-			{1, 1, 1, 0, 0, 0, 0, 0, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 1}, // 9
-			{1, 1, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 1}, // 10
-			{1, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 1}, // 11
-			{1, 1, 1, 0, 0, 0, 0, 0, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 1}  // 12
+			//0  1  2  3  4  5  6  7  8  9 10  10,12,13,14,15,16,17,18,19,20,20,22,23,24
+			{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}, // 0
+			{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}, // 1
+			{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}, // 2
+			{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}, // 3
+			{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}, // 4
+			{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}, // 5
+			{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}, // 6
+			{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}, // 7
+			{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}, // 8
+			{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}, // 9
+			{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}, // 10
+			{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}, // 11
+			{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}  // 12
 		};
 
 	AStar *pAStar = new AStar(array);
@@ -257,9 +257,9 @@ int main(int argc, char *argv[])
 
 	Rect rect;
 	Point left_up, right_bottom;
-	for (int i = 0; i < array.size(); i++)
+	for (size_t i = 0; i < array.size(); i++)
 	{
-		for (int j = 0; j < array[0].size(); j++)
+		for (size_t j = 0; j < array[0].size(); j++)
 		{
 			left_up.x = j * PIXEL_SIZE; //存储数组的列(j)对应矩形的x轴
 			left_up.y = i * PIXEL_SIZE;
@@ -285,7 +285,6 @@ int main(int argc, char *argv[])
 	CPoint *start = new CPoint(start_point_x, start_point_y);
 	CPoint *end = new CPoint(goal_point_x, goal_point_y);
 	CPoint *point = pAStar->FindPath(start, end, false);
-	std::cout << __LINE__ << std::endl;
 
 	while (point != NULL)
 	{
